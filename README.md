@@ -1,36 +1,36 @@
-# ZAY CLICKER (starter source)
+# ZAY CLICKER 0.3.0 - Root uinput Multitouch
 
-Target awal: Android 8+ / compile SDK 35. Project ditulis dengan Kotlin dan Android Gradle Plugin.
+## Fitur
+- Root backend lewat `su` (KernelSU/Magisk).
+- Native C++ virtual touchscreen melalui `/dev/uinput`.
+- Dua slot sentuhan terpisah: slot 0 untuk HOLD, slot 1 untuk CLICK.
+- CLICK dan HOLD dapat aktif bersamaan pada satu virtual input device.
+- Overlay marker CLICK/HOLD dapat digeser langsung; tidak ada kolom koordinat X/Y.
+- Posisi marker disimpan setelah digeser.
+- Floating control START/STOP CLICK, START/STOP HOLD, STOP ALL, dan pengaturan interval (+/- 20 ms).
+- Marker dapat dipindah saat HOLD aktif; engine mengirim MOVE pada slot hold.
 
-## Buka project
-1. Ekstrak ZIP.
-2. Buka folder `ZayClicker` di Android Studio.
-3. Tunggu Gradle Sync.
-4. Build > Build APK(s).
-5. Instal APK hasil build.
-6. Buka Settings > Accessibility > ZAY CLICKER gesture service, lalu aktifkan.
+## Build
+1. Buka project ini dengan Android Studio yang memasang Android SDK 35, NDK 27.2.12479018, dan CMake 3.22.1.
+2. Sync Gradle lalu jalankan `assembleDebug`.
+3. APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Kondisi fitur saat ini
-- Form koordinat click dan hold: tersedia.
-- Pengulangan spam click: tersedia melalui AccessibilityService.
-- Gesture hold berdurasi terbatas: tersedia sebagai implementasi awal.
-- Stop control: tersedia sebagai prototipe.
-- Floating overlay / drag target editor: belum dibuat.
-- Root backend / Magisk: belum dibuat.
-- CLICK dan HOLD multi-touch simultan: BELUM dijamin dan belum diimplementasikan.
+Atau push project ke GitHub. Workflow `.github/workflows/android-build.yml` membangun APK debug dan mengunggah artifact.
 
-## Kenapa belum mengklaim multi-touch?
-`AccessibilityService.dispatchGesture()` dapat membatalkan gesture yang sedang berjalan ketika gesture baru dikirim. Karena itu dua loop terpisah bukan solusi yang benar untuk satu jari hold sambil jari kedua spam-click. Implementasi root yang benar memerlukan backend input virtual multi-touch (misalnya uinput) yang kompatibel dengan kernel dan SELinux perangkat. Itu perlu diuji pada Poco X5; sekadar menambahkan `su` tidak otomatis membuatnya bekerja.
+## Instalasi dan penggunaan
+1. Instal APK dan buka ZAY CLICKER.
+2. Berikan izin "Tampil di atas aplikasi lain".
+3. Tekan CEK AKSES ROOT dan izinkan KernelSU.
+4. Tekan JALANKAN FLOATING CONTROL.
+5. Geser marker biru CLICK dan hijau HOLD ke target di layar. Atur interval dengan tombol −/+ pada panel.
+6. Tekan START HOLD dan START CLICK sesuai kebutuhan. Keduanya memakai slot multitouch terpisah.
+7. STOP ALL melepaskan semua slot sentuhan dan menghentikan loop click.
 
-Koordinat adalah piksel layar mentah pada orientasi saat ini. Versi ini belum punya kalibrasi/overlay pemilih posisi.
-
-
-## Build APK otomatis lewat GitHub Actions
-1. Buat repository GitHub baru, misalnya `ZayClicker`.
-2. Upload seluruh isi folder project ini ke root repository (pastikan folder `.github/workflows/` ikut ter-upload).
-3. Buka tab **Actions** di repository.
-4. Pilih workflow **Android APK Build** lalu tekan **Run workflow**. Workflow juga berjalan otomatis setiap push ke branch `main` atau `master`.
-5. Setelah selesai, buka run yang berhasil dan unduh artifact **ZAY-CLICKER-debug-apk**.
-6. Ekstrak artifact ZIP untuk mendapatkan `app-debug.apk`.
-
-Build ini menghasilkan APK debug untuk pengujian, bukan APK release bertanda tangan untuk distribusi.
+## Catatan kompatibilitas
+- Target ABI saat ini `arm64-v8a`, sesuai perangkat Poco X5 5G 64-bit.
+- Kernel harus menyediakan `/dev/uinput` dan `CONFIG_INPUT_UINPUT=y`.
+- Aplikasi tidak mengubah SELinux dan tidak menjalankan `setenforce 0`.
+- Pada perangkat yang diberikan, `/dev/uinput` terlihat sebagai `uhid:uhid` dengan mode `0660`, sementara proses `su` berada di domain `u:r:ksu:s0`. Root UID tidak menjamin akses SELinux. Jika SELinux menolak `open()` atau ioctl, status error akan muncul di toast; kebijakan perangkat perlu diperiksa secara terpisah. Jangan mematikan SELinux sebagai jalan pintas.
+- Android/OEM dapat mengabaikan virtual touchscreen jika konfigurasi InputReader atau pemetaan display tidak cocok. Keberhasilan pembuatan device perlu diverifikasi pada perangkat dengan `getevent -lp` dan `dumpsys input`.
+- Posisi overlay memakai ukuran display aktual. Rotasi layar setelah service aktif mungkin memerlukan restart overlay agar ukuran input diperbarui.
+- Build ini belum diuji pada perangkat fisik. Uji awal di layar aman dan gunakan STOP ALL jika sentuhan tidak berhenti seperti diharapkan.

@@ -7,107 +7,75 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
-import android.view.View
-import android.view.accessibility.AccessibilityManager
-import android.widget.*
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
-    private lateinit var xClick: EditText
-    private lateinit var yClick: EditText
-    private lateinit var xHold: EditText
-    private lateinit var yHold: EditText
-    private lateinit var interval: EditText
     private lateinit var status: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(12, 16, 28)
         window.navigationBarColor = Color.rgb(12, 16, 28)
-
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(22, 28, 22, 24)
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(24, 28, 24, 24)
             setBackgroundColor(Color.rgb(12, 16, 28))
         }
-        fun label(text: String, size: Float = 14f) = TextView(this).apply {
-            this.text = text
-            textSize = size
-            setTextColor(Color.rgb(225, 232, 248))
-            setPadding(0, 12, 0, 6)
-        }
-        fun field(hint: String, value: String): EditText = EditText(this).apply {
-            this.hint = hint
-            setSingleLine(true)
-            setText(value)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            setPadding(14, 8, 14, 8)
-            setBackgroundColor(Color.rgb(29, 37, 57))
-        }
-        fun button(text: String, action: () -> Unit) = Button(this).apply {
-            this.text = text
-            setOnClickListener { action() }
-        }
-
-        page.addView(label("ZAY CLICKER", 26f))
-        page.addView(label("Atur koordinat layar dan interval. Aktifkan layanan Accessibility terlebih dahulu."))
-        page.addView(button("BUKA PENGATURAN ACCESSIBILITY") {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        page.addView(TextView(this).apply {
+            text = "ZAY CLICKER"
+            textSize = 28f; setTextColor(Color.WHITE)
         })
-        status = label("Status: memeriksa layanan…")
-        page.addView(status)
-
-        page.addView(label("SPAM CLICK"))
-        xClick = field("X click", "500"); yClick = field("Y click", "800")
-        page.addView(row(xClick, yClick))
-        interval = field("Interval (ms)", "100")
-        page.addView(interval)
-        page.addView(button("MULAI SPAM CLICK") { startClick() })
-        page.addView(button("STOP SPAM CLICK") { send(Action.STOP_CLICK) })
-
-        page.addView(label("HOLD"))
-        xHold = field("X hold", "700"); yHold = field("Y hold", "800")
-        page.addView(row(xHold, yHold))
-        page.addView(button("MULAI HOLD") { startHold() })
-        page.addView(button("STOP HOLD") { send(Action.STOP_HOLD) })
-
-        page.addView(button("STOP SEMUA") { send(Action.STOP_ALL) })
-        page.addView(label(
-            "Catatan: versi awal ini memakai AccessibilityService. Android dapat membatalkan gesture yang sedang berjalan saat gesture baru dikirim, sehingga CLICK + HOLD simultan belum dijamin. Dukungan root/uinput khusus perangkat belum diimplementasikan.",
-            12f
-        ))
-        val scroll = ScrollView(this).apply { addView(page) }
-        setContentView(scroll)
-    }
-
-    private fun row(a: View, b: View) = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        addView(a, LinearLayout.LayoutParams(0, -2, 1f))
-        addView(b, LinearLayout.LayoutParams(0, -2, 1f))
-    }
-
-    override fun onResume() {
-        super.onResume()
-        status.text = if (isServiceEnabled()) "Status: Accessibility aktif" else "Status: Accessibility belum aktif"
-    }
-
-    private fun isServiceEnabled(): Boolean {
-        val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
-        return manager.getEnabledAccessibilityServiceList(0).any {
-            it.resolveInfo.serviceInfo.packageName == packageName
+        page.addView(TextView(this).apply {
+            text = "Root uinput multitouch • CLICK + HOLD simultan"
+            textSize = 14f; setTextColor(0xFFB8C7DF.toInt()); setPadding(0, 8, 0, 24)
+        })
+        status = TextView(this).apply {
+            textSize = 13f; setTextColor(0xFFB8C7DF.toInt()); setPadding(0, 8, 0, 16)
         }
+        page.addView(status)
+        addButton(page, "1. IZINKAN OVERLAY") {
+            if (!Settings.canDrawOverlays(this)) {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            } else Toast.makeText(this, "Izin overlay sudah aktif", Toast.LENGTH_SHORT).show()
+        }
+        addButton(page, "2. CEK AKSES ROOT") { checkRoot() }
+        addButton(page, "3. JALANKAN FLOATING CONTROL") {
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "Aktifkan izin overlay dulu", Toast.LENGTH_LONG).show()
+            } else {
+                val intent = Intent(this, OverlayService::class.java)
+                if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+                Toast.makeText(this, "Overlay dimulai. Geser marker CLICK/HOLD.", Toast.LENGTH_LONG).show()
+            }
+        }
+        addButton(page, "HENTIKAN OVERLAY") { stopService(Intent(this, OverlayService::class.java)) }
+        page.addView(TextView(this).apply {
+            text = "Cara pakai: geser marker biru CLICK dan hijau HOLD ke posisi target. START CLICK dan START HOLD bisa aktif bersamaan. STOP ALL melepas semua sentuhan virtual. Tidak perlu memasukkan angka koordinat."
+            textSize = 13f; setTextColor(0xFF9EABC2.toInt()); setPadding(0, 18, 0, 0)
+        })
+        setContentView(page)
     }
 
-    private fun startClick() {
-        val x = xClick.num(); val y = yClick.num(); val ms = interval.num().coerceAtLeast(40)
-        send(Action.START_CLICK, x, y, ms)
+    private fun addButton(parent: LinearLayout, title: String, action: () -> Unit) {
+        parent.addView(Button(this).apply {
+            text = title; isAllCaps = false; setOnClickListener { action() }
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 8 })
     }
-    private fun startHold() = send(Action.START_HOLD, xHold.num(), yHold.num(), 0)
-    private fun EditText.num() = text.toString().toIntOrNull() ?: 0
-    private fun send(action: Action, x: Int = 0, y: Int = 0, interval: Int = 0) {
-        ClickAccessibilityService.instance?.handle(action, x, y, interval)
-            ?: Toast.makeText(this, "Aktifkan Accessibility Service dahulu", Toast.LENGTH_LONG).show()
+
+    private fun checkRoot() {
+        status.text = "Memeriksa root..."
+        Thread {
+            val result = try {
+                val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+                val output = process.inputStream.bufferedReader().readText().trim()
+                val code = process.waitFor()
+                if (code == 0 && output.contains("uid=0")) "Root: AKTIF ($output)" else "Root gagal: ${output.ifBlank { "izin ditolak" }}"
+            } catch (e: Exception) { "Root error: ${e.message}" }
+            runOnUiThread { status.text = result }
+        }.start()
     }
 }
-
-enum class Action { START_CLICK, STOP_CLICK, START_HOLD, STOP_HOLD, STOP_ALL }
